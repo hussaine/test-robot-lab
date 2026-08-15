@@ -10,7 +10,7 @@
 #
 # Options:
 #   --skip-upgrade    don't run 'apt upgrade'
-#   --with-vbox-tools also install VirtualBox guest additions (clipboard, resize)
+#   --skip-vbox-tools don't install VirtualBox guest additions
 #   --yes             don't ask for confirmation
 #
 # It also adds two aliases: sb (re-read ~/.bashrc) and eb (edit it in VS Code).
@@ -21,13 +21,13 @@ set -uo pipefail
 
 LOG="$HOME/vm-setup.log"
 SKIP_UPGRADE=0
-WITH_VBOX=0
+SKIP_VBOX=0
 ASSUME_YES=0
 
 for arg in "$@"; do
   case "$arg" in
     --skip-upgrade)    SKIP_UPGRADE=1 ;;
-    --with-vbox-tools) WITH_VBOX=1 ;;
+    --skip-vbox-tools) SKIP_VBOX=1 ;;
     --yes|-y)          ASSUME_YES=1 ;;
     -h|--help)
       awk 'NR>1 && /^#/ { sub(/^# ?/, ""); print; next } NR>1 { exit }' "$0"
@@ -72,7 +72,20 @@ if [[ -r /etc/os-release ]]; then
   fi
 fi
 
-curl -fsS -m8 -o /dev/null https://github.com || die "no internet connection"
+# Deliberately not curl-only: curl is one of the things this script installs, and
+# a minimal image may not have it. Reporting "no internet" when the real problem
+# is a missing tool would send you looking in the wrong place.
+network_reachable() {
+  if command -v curl >/dev/null; then
+    curl -fsS -m8 -o /dev/null https://github.com && return 0
+  fi
+  if command -v wget >/dev/null; then
+    wget -q -T8 -O /dev/null https://github.com && return 0
+  fi
+  ping -c1 -W3 github.com >/dev/null 2>&1 && return 0
+  return 1
+}
+network_reachable || die "can't reach github.com -- check the VM's network"
 ok "internet reachable"
 
 if (( ! ASSUME_YES )); then
@@ -118,18 +131,22 @@ sudo apt-get "${APT[@]}" install \
 
 ok "python3-opencv, python3-numpy   -- computer vision"
 ok "opencv-data                     -- the Haar cascade files"
-ok "openssh-client, mosh            -- reaching the robot"
+ok "openssh-client                  -- reaching the robot"
+ok "mosh                            -- installed, for later"
 ok "avahi-utils, libnss-mdns        -- so robot-7.local resolves"
 ok "mosquitto-clients, paho-mqtt    -- MQTT experiments"
 ok "ffmpeg, v4l-utils               -- stream debugging"
 
-if (( WITH_VBOX )); then
-  step "VirtualBox guest additions"
-  if sudo apt-get "${APT[@]}" install virtualbox-guest-utils virtualbox-guest-x11; then
-    ok "installed -- reboot for shared clipboard and window resizing"
-  else
-    warn "couldn't install them; use the VirtualBox Devices menu instead"
-  fi
+step "VirtualBox guest additions"
+if (( SKIP_VBOX )); then
+  warn "skipped (--skip-vbox-tools)"
+elif sudo apt-get "${APT[@]}" install virtualbox-guest-utils virtualbox-guest-x11; then
+  ok "installed -- reboot for shared clipboard and window resizing"
+else
+  # These live in Ubuntu's universe pocket and aren't published for every
+  # architecture, so failing here is plausible rather than alarming.
+  warn "couldn't install them -- use the VirtualBox Devices menu instead"
+  warn "(Devices > Insert Guest Additions CD image)"
 fi
 
 # ---------------------------------------------------------------------------
@@ -142,9 +159,10 @@ BEGIN="# --- robotlab (managed by setup-vm.sh) ---"
 END="# --- end robotlab ---"
 BASHRC="$HOME/.bashrc"
 touch "$BASHRC"
-cp "$BASHRC" "$BASHRC.bak.$(date +%Y%m%d%H%M%S)"
 
 TMP="$(mktemp)"
+NEW="$(mktemp)"
+trap 'rm -f "$TMP" "$NEW"' EXIT
 awk -v b="$BEGIN" -v e="$END" '
   $0 == b { inblock = 1; next }
   $0 == e { inblock = 0; next }
@@ -154,17 +172,28 @@ awk -v b="$BEGIN" -v e="$END" '
 ' "$BASHRC" > "$TMP"
 
 {
-  cat "$TMP"
+  # Collapse trailing blank lines that removing the old block left behind.
+  # Without this, each run appends another blank line, the file never compares
+  # equal, and it grows a little every time.
+  awk 'BEGIN { blank = 0 }
+       { if ($0 == "") { blank++ } else { while (blank > 0) { print ""; blank-- }; print } }' "$TMP"
   echo
   echo "$BEGIN"
   echo "alias sb='source ~/.bashrc'"
   echo "alias eb='code ~/.bashrc'"
   echo "$END"
-} > "$BASHRC"
-rm -f "$TMP"
+} > "$NEW"
 
-ok "sb -- re-read ~/.bashrc"
-ok "eb -- edit ~/.bashrc in VS Code"
+# Only replace ~/.bashrc if it actually differs. This script is safe to re-run,
+# and a backup file per run would just pile up in the student's home directory.
+if cmp -s "$NEW" "$BASHRC"; then
+  ok "aliases already up to date"
+else
+  cp "$BASHRC" "$BASHRC.labbak"       # one backup, overwritten, not one per run
+  cat "$NEW" > "$BASHRC"
+  ok "sb -- re-read ~/.bashrc"
+  ok "eb -- edit ~/.bashrc in VS Code"
+fi
 
 # ---------------------------------------------------------------------------
 
@@ -222,7 +251,7 @@ cat <<EOF
 
 Open a new terminal (so the aliases load), then:
 
-    mosh robot@robot-1.local        connect to your robot
+    ssh robot@robot-1.local         connect to your robot
     ./cvclient.py 1                 computer vision on its camera stream
 
 If robot-1.local can't be found, your VM's network adapter is probably set to

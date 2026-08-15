@@ -24,12 +24,14 @@ git clone https://github.com/sjaraza/test-robot-lab.git ~/test-robot-lab
 bash ~/test-robot-lab/setup-vm.sh
 ```
 
-Then **open a new terminal** so the aliases load.
+Then **open a new terminal** so the aliases load. Reboot once as well, so the
+VirtualBox guest additions take effect — you get a resizable window and a shared
+clipboard.
 
 | Option | Effect |
 |---|---|
 | `--skip-upgrade` | don't run `apt upgrade` |
-| `--with-vbox-tools` | VirtualBox guest additions: shared clipboard, window resizing |
+| `--skip-vbox-tools` | don't install the VirtualBox guest additions |
 | `--yes` | no confirmation prompt |
 
 Safe to re-run. Logged to `~/vm-setup.log`.
@@ -45,6 +47,7 @@ Safe to re-run. Logged to `~/vm-setup.log`.
 | `mosquitto-clients`, `python3-paho-mqtt` | MQTT experiments |
 | `ffmpeg`, `v4l-utils` | debugging streams outside Python |
 | `git`, `python3-pip`, `curl` | the basics |
+| `virtualbox-guest-utils`, `-x11` | shared clipboard and window resizing |
 
 **Everything comes from apt, and there is no virtualenv.** That's deliberate:
 Ubuntu 24.04 marks the system Python as externally managed (PEP 668), so
