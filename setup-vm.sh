@@ -12,6 +12,9 @@
 #   --with-vbox-tools also install VirtualBox guest additions (clipboard, resize)
 #   --yes             don't ask for confirmation
 #
+# It also adds three aliases: sb (re-read ~/.bashrc), eb (edit it in VS Code),
+# and runvenv (activate the Python environment by hand).
+#
 # Safe to re-run.
 
 set -uo pipefail
@@ -184,22 +187,43 @@ else
   sudo apt-get "${APT[@]}" install python3-opencv || warn "that failed too"
 fi
 
-# Auto-activate, as one managed block so re-running can't stack duplicates.
-BEGIN="# --- robotlab python (managed by setup-vm.sh) ---"
-END="# --- end robotlab python ---"
+step "Shell setup"
+
+# One managed block, rewritten rather than appended, so re-running can't stack
+# duplicates.
+BEGIN="# --- robotlab (managed by setup-vm.sh) ---"
+END="# --- end robotlab ---"
 BASHRC="$HOME/.bashrc"
 touch "$BASHRC"
-if grep -qF "$BEGIN" "$BASHRC"; then
-  ok "virtualenv already activates on login"
-else
-  {
-    echo
-    echo "$BEGIN"
-    echo "[ -f \"$VENV/bin/activate\" ] && source \"$VENV/bin/activate\""
-    echo "$END"
-  } >> "$BASHRC"
-  ok "added activation to ~/.bashrc"
-fi
+cp "$BASHRC" "$BASHRC.bak.$(date +%Y%m%d%H%M%S)"
+
+TMP="$(mktemp)"
+awk -v b="$BEGIN" -v e="$END" '
+  $0 == b { inblock = 1; next }
+  $0 == e { inblock = 0; next }
+  inblock { next }
+  /^alias (sb|eb|runvenv)=/ { next }
+  { print }
+' "$BASHRC" > "$TMP"
+
+{
+  cat "$TMP"
+  echo
+  echo "$BEGIN"
+  echo "alias sb='source ~/.bashrc'"
+  echo "alias eb='code ~/.bashrc'"
+  echo "alias runvenv='source $VENV/bin/activate'"
+  # The guard matters: without it, every 'sb' would prepend the venv to PATH
+  # again and PATH would grow each time you re-read the file.
+  echo "if [ -z \"\${VIRTUAL_ENV:-}\" ] && [ -f \"$VENV/bin/activate\" ]; then"
+  echo "  source \"$VENV/bin/activate\""
+  echo "fi"
+  echo "$END"
+} > "$BASHRC"
+rm -f "$TMP"
+
+ok "aliases: sb (re-read bashrc), eb (edit it in VS Code), runvenv"
+ok "the virtualenv activates on login, guarded against double-activation"
 
 # ---------------------------------------------------------------------------
 
@@ -245,6 +269,9 @@ Open a NEW terminal (so the Python environment activates), then:
 
     mosh robot@robot-1.local        connect to your robot
     ./cvclient.py 1                 computer vision on its camera stream
+
+Handy aliases: ${BOLD}sb${OFF} re-reads ~/.bashrc, ${BOLD}eb${OFF} opens it in
+VS Code, ${BOLD}runvenv${OFF} activates the Python environment by hand.
 
 If robot-1.local can't be found, your VM's network adapter is probably set to
 NAT. Change it to ${BOLD}Bridged Adapter${OFF} in the VirtualBox settings -- mDNS

@@ -58,6 +58,20 @@ creates a virtualenv at `~/.venvs/robotlab` and auto-activates it from
 `python3-opencv` lacks it too. ArUco markers are the easiest way to give a robot
 something reliable to see, so contrib is worth the slightly larger download.
 
+## Aliases it adds
+
+| Alias | What it does |
+|---|---|
+| `sb` | re-read `~/.bashrc` after editing it |
+| `eb` | open `~/.bashrc` in VS Code |
+| `runvenv` | activate the Python environment by hand |
+
+You rarely need `runvenv` — the environment activates on login. It's for when
+you've run `deactivate`, or you're in a shell that didn't read `.bashrc`.
+
+The activation is guarded on `$VIRTUAL_ENV`, so running `sb` repeatedly can't keep
+prepending the venv to `PATH`.
+
 ## cvclient.py — computer vision on the robot's camera
 
 ```bash
