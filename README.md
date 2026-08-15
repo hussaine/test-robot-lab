@@ -67,11 +67,30 @@ make a virtualenv then — `python3 -m venv ~/myenv`.
 
 | Alias | What it does |
 |---|---|
+| `update` | pull the latest lab code and re-check the tools |
 | `sb` | re-read `~/.bashrc` after editing it |
 | `eb` | open `~/.bashrc` in VS Code |
 
 `eb` needs VS Code on your PATH. The script checks and warns if `code` isn't
 found.
+
+## Keeping up to date
+
+```bash
+update
+```
+
+Pulls the latest lab code, refreshes the aliases, and checks the tools —
+installing only what's actually missing. Built to be run often:
+
+- **No `apt upgrade`**, so it takes seconds.
+- **No sudo** unless something genuinely needs installing.
+- **New aliases arrive automatically** as the lab grows.
+- `update --check` reports what's missing and changes nothing.
+
+It verifies `ffmpeg` by *running* it, not just finding it on PATH — a
+present-but-broken ffmpeg looks fine to `command -v` and then shows up much later
+as a stream that silently produces no frames.
 
 ## cvclient.py — computer vision on the robot's camera
 

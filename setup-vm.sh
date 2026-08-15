@@ -13,7 +13,8 @@
 #   --skip-vbox-tools don't install VirtualBox guest additions
 #   --yes             don't ask for confirmation
 #
-# It also adds two aliases: sb (re-read ~/.bashrc) and eb (edit it in VS Code).
+# It also adds three aliases: update (pull the latest lab code and re-check the
+# tools), sb (re-read ~/.bashrc) and eb (edit it in VS Code).
 #
 # Safe to re-run.
 
@@ -153,47 +154,8 @@ fi
 
 step "Shell aliases"
 
-# One managed block, rewritten rather than appended, so re-running can't stack
-# duplicates.
-BEGIN="# --- robotlab (managed by setup-vm.sh) ---"
-END="# --- end robotlab ---"
-BASHRC="$HOME/.bashrc"
-touch "$BASHRC"
-
-TMP="$(mktemp)"
-NEW="$(mktemp)"
-trap 'rm -f "$TMP" "$NEW"' EXIT
-awk -v b="$BEGIN" -v e="$END" '
-  $0 == b { inblock = 1; next }
-  $0 == e { inblock = 0; next }
-  inblock { next }
-  /^alias (sb|eb|runvenv)=/ { next }
-  { print }
-' "$BASHRC" > "$TMP"
-
-{
-  # Collapse trailing blank lines that removing the old block left behind.
-  # Without this, each run appends another blank line, the file never compares
-  # equal, and it grows a little every time.
-  awk 'BEGIN { blank = 0 }
-       { if ($0 == "") { blank++ } else { while (blank > 0) { print ""; blank-- }; print } }' "$TMP"
-  echo
-  echo "$BEGIN"
-  echo "alias sb='source ~/.bashrc'"
-  echo "alias eb='code ~/.bashrc'"
-  echo "$END"
-} > "$NEW"
-
-# Only replace ~/.bashrc if it actually differs. This script is safe to re-run,
-# and a backup file per run would just pile up in the student's home directory.
-if cmp -s "$NEW" "$BASHRC"; then
-  ok "aliases already up to date"
-else
-  cp "$BASHRC" "$BASHRC.labbak"       # one backup, overwritten, not one per run
-  cat "$NEW" > "$BASHRC"
-  ok "sb -- re-read ~/.bashrc"
-  ok "eb -- edit ~/.bashrc in VS Code"
-fi
+# Delegated so update.sh and this script can't drift apart.
+bash "$(dirname "${BASH_SOURCE[0]}")/setup-aliases.sh" | sed 's/^/   /'
 
 # ---------------------------------------------------------------------------
 
@@ -253,6 +215,7 @@ Open a new terminal (so the aliases load), then:
 
     ssh robot@robot-1.local         connect to your robot
     ./cvclient.py 1                 computer vision on its camera stream
+    update                          get the latest lab code, any time
 
 If robot-1.local can't be found, your VM's network adapter is probably set to
 NAT. Change it to ${BOLD}Bridged Adapter${OFF} in the VirtualBox settings -- mDNS
