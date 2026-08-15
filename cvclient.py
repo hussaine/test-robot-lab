@@ -6,10 +6,10 @@
     ./cvclient.py 1 --detect motion  # frame differencing
     ./cvclient.py 1 --no-window      # headless, print detections
 
-Needs OpenCV on the laptop:
+Needs OpenCV. On the student VM that's already installed by setup-vm.sh:
 
-    pip install opencv-python                 # any OS
-    sudo apt install python3-opencv           # Ubuntu / the VM
+    sudo apt install python3-opencv opencv-data    # Ubuntu / the VM
+    pip install opencv-python                      # macOS or Windows
 
 Everything heavy happens here, not on the robot. The robot only captures and
 hardware-encodes; a Pi Zero 2 W has four slow cores and 512MB, and Haar cascades
@@ -23,6 +23,8 @@ correct trade for live control.
 """
 
 import argparse
+import glob
+import os
 import socket
 import sys
 import threading
@@ -56,12 +58,32 @@ def process_frame(frame, state, detector):
 # detectors
 # ---------------------------------------------------------------------------
 
+def find_cascade(name="haarcascade_frontalface_default.xml"):
+    """Locate a Haar cascade file, whichever OpenCV this is.
+
+    The pip wheels bundle the XML files and expose them via cv2.data; Ubuntu's
+    python3-opencv package doesn't have cv2.data at all and ships them in
+    /usr/share/opencv4/haarcascades via the separate opencv-data package. Check
+    both rather than assuming either.
+    """
+    candidates = []
+    if hasattr(cv2, "data"):
+        candidates.append(os.path.join(cv2.data.haarcascades, name))
+    candidates += sorted(glob.glob(f"/usr/share/opencv*/haarcascades/{name}"))
+
+    for path in candidates:
+        if os.path.isfile(path) and not cv2.CascadeClassifier(path).empty():
+            return path
+
+    sys.exit(f"couldn't find {name}.\n"
+             "  On Ubuntu, install the cascade files with:\n"
+             "      sudo apt install opencv-data\n"
+             "  (apt's OpenCV doesn't bundle them the way pip's wheel does)")
+
+
 def make_face_detector():
     """Haar cascade face detection. The classic 'my robot can see' demo."""
-    path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-    cascade = cv2.CascadeClassifier(path)
-    if cascade.empty():
-        sys.exit(f"couldn't load the cascade from {path}")
+    cascade = cv2.CascadeClassifier(find_cascade())
 
     def detect(frame, state):
         grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)

@@ -3,32 +3,29 @@
 #
 #   bash setup-vm.sh
 #
-# Installs VS Code, git, Python tooling and OpenCV (contrib), plus the bits you
-# need to actually reach a robot: mosh, and mDNS so `robot-7.local` resolves.
+# Installs what you need to reach a robot and run computer vision on its camera:
+# git, OpenCV, mosh, and mDNS so `robot-7.local` resolves.
+#
+# VS Code is NOT installed here -- install it yourself from code.visualstudio.com.
 #
 # Options:
-#   --skip-vscode     don't install VS Code (about 100MB to download)
 #   --skip-upgrade    don't run 'apt upgrade'
 #   --with-vbox-tools also install VirtualBox guest additions (clipboard, resize)
 #   --yes             don't ask for confirmation
 #
-# It also adds three aliases: sb (re-read ~/.bashrc), eb (edit it in VS Code),
-# and runvenv (activate the Python environment by hand).
+# It also adds two aliases: sb (re-read ~/.bashrc) and eb (edit it in VS Code).
 #
 # Safe to re-run.
 
 set -uo pipefail
 
 LOG="$HOME/vm-setup.log"
-VENV="$HOME/.venvs/robotlab"
-SKIP_VSCODE=0
 SKIP_UPGRADE=0
 WITH_VBOX=0
 ASSUME_YES=0
 
 for arg in "$@"; do
   case "$arg" in
-    --skip-vscode)     SKIP_VSCODE=1 ;;
     --skip-upgrade)    SKIP_UPGRADE=1 ;;
     --with-vbox-tools) WITH_VBOX=1 ;;
     --yes|-y)          ASSUME_YES=1 ;;
@@ -64,10 +61,7 @@ sudo -v 2>/dev/null || die "sudo isn't working for this user"
 ok "sudo works"
 
 ARCH="$(dpkg --print-architecture)"
-case "$ARCH" in
-  amd64|arm64) ok "architecture: $ARCH" ;;
-  *) die "unexpected architecture '$ARCH' -- expected amd64 or arm64" ;;
-esac
+ok "architecture: $ARCH"
 
 if [[ -r /etc/os-release ]]; then
   . /etc/os-release
@@ -83,14 +77,14 @@ ok "internet reachable"
 
 if (( ! ASSUME_YES )); then
   echo
-  echo "This installs VS Code, git, Python tooling, OpenCV and mosh."
+  echo "This installs OpenCV, mosh, git and mDNS support. A few minutes."
   read -r -p "Continue? [y/N]: " reply
   [[ "$reply" =~ ^[Yy] ]] || { echo "cancelled"; exit 0; }
 fi
 
 # ---------------------------------------------------------------------------
 
-step "System packages"
+step "Packages"
 
 export DEBIAN_FRONTEND=noninteractive
 APT=(-y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
@@ -105,89 +99,42 @@ else
   ok "system upgraded"
 fi
 
-# Grouped by why they're here, because "why is this installed" is a fair question.
+# All from apt, deliberately. Ubuntu 24.04 marks the system Python as externally
+# managed (PEP 668), so 'pip install opencv-python' is refused outright -- but
+# apt's python3-opencv sidesteps that entirely, with no virtualenv to explain or
+# activate. It also pulls its own GUI dependencies, so cv2's windows just work.
+#
+# opencv-data is the one that's easy to miss: the pip wheel bundles the Haar
+# cascade XML files, the Debian package does not. Without it, face detection
+# loads an empty classifier and silently finds nothing.
 sudo apt-get "${APT[@]}" install \
-  git curl ca-certificates build-essential \
-  python3-pip python3-venv python3-dev \
+  git curl ca-certificates \
+  python3-pip python3-numpy python3-opencv opencv-data \
   openssh-client mosh \
   avahi-utils libnss-mdns \
-  mosquitto-clients \
+  mosquitto-clients python3-paho-mqtt \
   ffmpeg v4l-utils \
-  libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 \
   || die "installing packages failed"
 
-ok "git, build tools, python3-venv"
-ok "openssh-client, mosh          -- reaching the robot"
-ok "avahi-utils, libnss-mdns      -- so robot-7.local resolves"
-ok "mosquitto-clients             -- MQTT experiments"
-ok "ffmpeg, v4l-utils             -- stream debugging"
-ok "libgl1 and friends            -- OpenCV's windows need these"
+ok "python3-opencv, python3-numpy   -- computer vision"
+ok "opencv-data                     -- the Haar cascade files"
+ok "openssh-client, mosh            -- reaching the robot"
+ok "avahi-utils, libnss-mdns        -- so robot-7.local resolves"
+ok "mosquitto-clients, paho-mqtt    -- MQTT experiments"
+ok "ffmpeg, v4l-utils               -- stream debugging"
 
 if (( WITH_VBOX )); then
   step "VirtualBox guest additions"
   if sudo apt-get "${APT[@]}" install virtualbox-guest-utils virtualbox-guest-x11; then
     ok "installed -- reboot for shared clipboard and window resizing"
   else
-    warn "couldn't install them; install from the VirtualBox Devices menu instead"
+    warn "couldn't install them; use the VirtualBox Devices menu instead"
   fi
 fi
 
 # ---------------------------------------------------------------------------
 
-step "VS Code"
-
-if (( SKIP_VSCODE )); then
-  warn "skipped (--skip-vscode)"
-elif command -v code >/dev/null; then
-  ok "already installed: $(code --version 2>/dev/null | head -1)"
-else
-  case "$ARCH" in
-    amd64) SLUG="linux-deb-x64" ;;
-    arm64) SLUG="linux-deb-arm64" ;;
-  esac
-  DEB="/tmp/vscode-$ARCH.deb"
-  echo "   downloading the $ARCH build, about 100MB ..."
-  if curl -fL --progress-bar -o "$DEB" \
-       "https://update.code.visualstudio.com/latest/$SLUG/stable"; then
-    # 'apt install ./file.deb' rather than dpkg -i, so dependencies resolve.
-    sudo apt-get "${APT[@]}" install "$DEB" || die "installing VS Code failed"
-    rm -f "$DEB"
-    # No PATH work needed: the .deb ships /usr/bin/code, and it also registers
-    # Microsoft's apt repo so 'apt upgrade' keeps VS Code current from now on.
-    ok "installed: $(code --version 2>/dev/null | head -1)"
-    ok "'code' is on PATH already (the .deb provides /usr/bin/code)"
-  else
-    warn "download failed -- install VS Code manually from code.visualstudio.com"
-  fi
-fi
-
-# ---------------------------------------------------------------------------
-
-step "Python environment with OpenCV"
-
-# Ubuntu 24.04 marks the system Python as externally managed (PEP 668), so
-# 'pip install' into it refuses outright. A virtualenv is the clean answer, and
-# auto-activating it means students never have to think about that.
-if [[ ! -d "$VENV" ]]; then
-  python3 -m venv "$VENV" || die "couldn't create the virtualenv at $VENV"
-  ok "created $VENV"
-else
-  ok "$VENV already exists"
-fi
-
-"$VENV/bin/pip" install --quiet --upgrade pip wheel || warn "couldn't upgrade pip"
-
-# --only-binary so a missing wheel fails in seconds instead of trying to compile
-# OpenCV, which would take hours in a VM.
-if "$VENV/bin/pip" install --only-binary=:all: opencv-contrib-python numpy; then
-  ok "opencv-contrib-python + numpy"
-else
-  warn "no OpenCV wheel for $ARCH -- falling back to Ubuntu's python3-opencv"
-  warn "(that build has no contrib modules, so ArUco and trackers won't be there)"
-  sudo apt-get "${APT[@]}" install python3-opencv || warn "that failed too"
-fi
-
-step "Shell setup"
+step "Shell aliases"
 
 # One managed block, rewritten rather than appended, so re-running can't stack
 # duplicates.
@@ -212,47 +159,55 @@ awk -v b="$BEGIN" -v e="$END" '
   echo "$BEGIN"
   echo "alias sb='source ~/.bashrc'"
   echo "alias eb='code ~/.bashrc'"
-  echo "alias runvenv='source $VENV/bin/activate'"
-  # The guard matters: without it, every 'sb' would prepend the venv to PATH
-  # again and PATH would grow each time you re-read the file.
-  echo "if [ -z \"\${VIRTUAL_ENV:-}\" ] && [ -f \"$VENV/bin/activate\" ]; then"
-  echo "  source \"$VENV/bin/activate\""
-  echo "fi"
   echo "$END"
 } > "$BASHRC"
 rm -f "$TMP"
 
-ok "aliases: sb (re-read bashrc), eb (edit it in VS Code), runvenv"
-ok "the virtualenv activates on login, guarded against double-activation"
+ok "sb -- re-read ~/.bashrc"
+ok "eb -- edit ~/.bashrc in VS Code"
 
 # ---------------------------------------------------------------------------
 
 step "Checking it worked"
 
-"$VENV/bin/python" - <<'PY' || warn "OpenCV didn't import from the virtualenv"
-import cv2, numpy
+python3 - <<'PY' || warn "OpenCV didn't import"
+import glob
+import cv2
+import numpy
 print(f"   ok   OpenCV {cv2.__version__}, numpy {numpy.__version__}")
-haar = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-print(f"   {'ok  ' if not cv2.CascadeClassifier(haar).empty() else 'FAIL'} "
-      "Haar cascade data present")
-print(f"   {'ok  ' if hasattr(cv2, 'aruco') else 'FAIL'} "
-      "contrib modules (cv2.aruco) present")
+
+# cv2.data exists in the pip wheels but not necessarily in Debian's package, so
+# look in both places.
+paths = []
+if hasattr(cv2, "data"):
+    paths.append(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+paths += glob.glob("/usr/share/opencv*/haarcascades/haarcascade_frontalface_default.xml")
+
+found = next((p for p in paths if not cv2.CascadeClassifier(p).empty()), None)
+if found:
+    print(f"   ok   Haar cascades: {found}")
+else:
+    print("   !    Haar cascade files not found -- is opencv-data installed?")
 PY
 
 for tool in git ssh mosh mosquitto_pub ffmpeg; do
-  if command -v "$tool" >/dev/null; then
-    ok "$tool"
-  else
-    warn "$tool is missing"
-  fi
+  command -v "$tool" >/dev/null && ok "$tool" || warn "$tool is missing"
 done
 
-# mDNS is the one that quietly ruins the afternoon: without it robot-7.local
-# doesn't resolve and nothing can reach the robot.
-if getent hosts ubuntu.local >/dev/null 2>&1 || systemctl is-active --quiet avahi-daemon; then
-  ok "mDNS is running (.local names should resolve)"
+# VS Code is the student's own job, but the eb alias needs it, so say so plainly.
+if command -v code >/dev/null; then
+  ok "code -- $(code --version 2>/dev/null | head -1)"
 else
-  warn "avahi doesn't look active; run: sudo systemctl enable --now avahi-daemon"
+  warn "VS Code isn't installed or isn't on PATH yet"
+  warn "install it from code.visualstudio.com; the 'eb' alias needs it"
+fi
+
+# mDNS is the one that quietly ruins an afternoon: without it robot-7.local
+# doesn't resolve and nothing can reach the robot.
+if systemctl is-active --quiet avahi-daemon; then
+  ok "avahi is running (.local names should resolve)"
+else
+  warn "avahi isn't active; run: sudo systemctl enable --now avahi-daemon"
 fi
 
 # ---------------------------------------------------------------------------
@@ -265,13 +220,10 @@ else
 fi
 cat <<EOF
 
-Open a NEW terminal (so the Python environment activates), then:
+Open a new terminal (so the aliases load), then:
 
     mosh robot@robot-1.local        connect to your robot
     ./cvclient.py 1                 computer vision on its camera stream
-
-Handy aliases: ${BOLD}sb${OFF} re-reads ~/.bashrc, ${BOLD}eb${OFF} opens it in
-VS Code, ${BOLD}runvenv${OFF} activates the Python environment by hand.
 
 If robot-1.local can't be found, your VM's network adapter is probably set to
 NAT. Change it to ${BOLD}Bridged Adapter${OFF} in the VirtualBox settings -- mDNS

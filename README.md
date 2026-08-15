@@ -15,16 +15,19 @@ captures and encodes; your VM does the computer vision.
 
 ## One-time setup
 
+Install **VS Code** yourself first, from
+[code.visualstudio.com](https://code.visualstudio.com) — the script doesn't do
+it. Then:
+
 ```bash
 git clone https://github.com/sjaraza/test-robot-lab.git ~/test-robot-lab
 bash ~/test-robot-lab/setup-vm.sh
 ```
 
-Then **open a new terminal** so the Python environment activates.
+Then **open a new terminal** so the aliases load.
 
 | Option | Effect |
 |---|---|
-| `--skip-vscode` | don't install VS Code (~100MB download) |
 | `--skip-upgrade` | don't run `apt upgrade` |
 | `--with-vbox-tools` | VirtualBox guest additions: shared clipboard, window resizing |
 | `--yes` | no confirmation prompt |
@@ -35,28 +38,27 @@ Safe to re-run. Logged to `~/vm-setup.log`.
 
 | Package | Why |
 |---|---|
-| VS Code | the `.deb` for your architecture, detected automatically |
-| `git`, `build-essential` | cloning, and building any pip package without a wheel |
-| `python3-venv`, `python3-pip` | Ubuntu 24.04 needs a virtualenv — see below |
-| `opencv-contrib-python` | CV. **contrib**, so ArUco markers and trackers are included |
+| `python3-opencv`, `python3-numpy` | computer vision |
+| `opencv-data` | the Haar cascade files — see below |
 | `openssh-client`, `mosh` | reaching the robot |
 | `avahi-utils`, `libnss-mdns` | so `robot-7.local` resolves at all |
-| `mosquitto-clients` | `mosquitto_pub` / `mosquitto_sub` for MQTT experiments |
+| `mosquitto-clients`, `python3-paho-mqtt` | MQTT experiments |
 | `ffmpeg`, `v4l-utils` | debugging streams outside Python |
-| `libgl1` and friends | OpenCV's own windows won't open without them |
+| `git`, `python3-pip`, `curl` | the basics |
 
-**On VS Code and PATH:** nothing to do. The `.deb` ships `/usr/bin/code`, and it
-registers Microsoft's apt repo, so `apt upgrade` keeps VS Code current from then
-on. That's why the script prefers the `.deb` over a tarball.
+**Everything comes from apt, and there is no virtualenv.** That's deliberate:
+Ubuntu 24.04 marks the system Python as externally managed (PEP 668), so
+`pip install opencv-python` is refused outright — but apt's `python3-opencv`
+sidesteps that with nothing to activate and nothing to explain. `python3` just
+has `cv2`.
 
-**On Python:** Ubuntu 24.04 marks the system Python as externally managed
-(PEP 668), so `pip install opencv-contrib-python` is refused outright. The script
-creates a virtualenv at `~/.venvs/robotlab` and auto-activates it from
-`~/.bashrc`, so `python3` just has `cv2` and students never meet the problem.
+**`opencv-data` is the easy one to miss.** The pip wheel bundles the Haar cascade
+XML files; the Debian package does not, they're in that separate package. Without
+it face detection loads an empty classifier and silently finds nothing.
 
-**On contrib:** the plain `opencv-python` wheel lacks `cv2.aruco`, and Ubuntu's
-`python3-opencv` lacks it too. ArUco markers are the easiest way to give a robot
-something reliable to see, so contrib is worth the slightly larger download.
+The trade for apt over pip: OpenCV is a version or two behind, and there's no
+`cv2.aruco` (contrib isn't packaged). If you later need contrib or a pip package,
+make a virtualenv then — `python3 -m venv ~/myenv`.
 
 ## Aliases it adds
 
@@ -64,13 +66,9 @@ something reliable to see, so contrib is worth the slightly larger download.
 |---|---|
 | `sb` | re-read `~/.bashrc` after editing it |
 | `eb` | open `~/.bashrc` in VS Code |
-| `runvenv` | activate the Python environment by hand |
 
-You rarely need `runvenv` — the environment activates on login. It's for when
-you've run `deactivate`, or you're in a shell that didn't read `.bashrc`.
-
-The activation is guarded on `$VIRTUAL_ENV`, so running `sb` repeatedly can't keep
-prepending the venv to `PATH`.
+`eb` needs VS Code on your PATH. The script checks and warns if `code` isn't
+found.
 
 ## cvclient.py — computer vision on the robot's camera
 
@@ -118,8 +116,10 @@ lid. Needs installing on **both** ends — `setup-vm.sh` does this side, and
 **Bridged Adapter** in VirtualBox — mDNS names don't cross NAT. Everything else
 here depends on this working.
 
-**`cv2` not found.** Open a new terminal; the virtualenv activates on login.
-Or run `source ~/.venvs/robotlab/bin/activate` in the current one.
+**`cv2` not found.** Run `sudo apt install python3-opencv opencv-data`.
+
+**Face detection finds nothing, ever.** The cascade files are missing:
+`sudo apt install opencv-data`.
 
 **Stream won't connect.** Start it on the robot: `cockpit`, item 7. Item 8 shows
 the stream's log.
