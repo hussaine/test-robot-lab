@@ -2,6 +2,7 @@
 """Read the robot's camera stream and run computer vision on it. LAPTOP side.
 
     ./cvclient.py 1                 # robot-1, show faces
+    ./cvclient.py A                  # robot-A
     ./cvclient.py 1 --detect none    # just view, measure latency
     ./cvclient.py 1 --detect motion  # frame differencing
     ./cvclient.py 1 --no-window      # headless, print detections
@@ -197,20 +198,38 @@ def reader(url, newest, stop):
         newest.error = exc
 
 
+def resolve_host(label):
+    """Work out the robot's hostname from whatever the student typed.
+
+    Robots are named robot-1, robot-A and so on, so a bare number *or* letter is
+    a suffix, not a hostname. Anything containing a dot is taken as given.
+
+        1              -> robot-1.local
+        A              -> robot-A.local
+        robot-a        -> robot-a.local
+        robot-a.local  -> robot-a.local
+        10.0.0.7       -> 10.0.0.7
+    """
+    label = label.strip()
+    if "." in label:
+        return label                        # a hostname or an IP; use it as-is
+    if not label.lower().startswith("robot-"):
+        label = f"robot-{label}"
+    return f"{label}.local"
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("robot", nargs="?", default="1",
-                        help="robot number, e.g. 3 (default 1)")
+                        help="robot number or letter, e.g. 3 or A (default 1)")
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--detect", choices=sorted(DETECTORS), default="faces")
     parser.add_argument("--no-window", action="store_true")
     args = parser.parse_args()
 
-    host = args.robot if not args.robot.isdigit() else f"robot-{args.robot}"
-    if not host.endswith(".local"):
-        host += ".local"
+    host = resolve_host(args.robot)
     url = f"http://{host}:{args.port}/stream.mjpg"
 
     print(f"robot   : {host}")

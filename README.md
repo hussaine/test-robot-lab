@@ -74,10 +74,15 @@ found.
 
 ```bash
 ./cvclient.py 1                  # robot-1, Haar cascade faces
+./cvclient.py A                  # robot-A -- letters work too
 ./cvclient.py 1 --detect motion  # frame differencing
 ./cvclient.py 1 --detect none    # just view, and measure latency
 ./cvclient.py 1 --no-window      # headless, print detections
 ```
+
+A bare number or letter is treated as a robot label, so `A` means
+`robot-A.local`. Anything with a dot in it is used as-is, so a full hostname or
+an IP also works.
 
 Start the stream first from the robot's cockpit (menu item 7). Edit
 `process_frame(frame, state, detector)` to write your own vision code; `state` is
