@@ -53,6 +53,10 @@ if (( ! CHECK_ONLY )); then
   # New aliases get added as the lab grows, and a student who only ever types
   # `update` should still end up with them. A no-op when nothing changed.
   bash "$REPO_DIR/setup-aliases.sh"
+
+  # Keeps `import robocam` pointing at this checkout after a pull. No reinstall,
+  # because it's a path entry rather than a copy.
+  bash "$REPO_DIR/install.sh"
 fi
 
 # ---------------------------------------------------------------------------
@@ -108,6 +112,22 @@ if command -v code >/dev/null; then
   ok "VS Code"
 else
   warn "VS Code isn't on PATH -- install it from code.visualstudio.com"
+fi
+
+# robocam is a path entry, not an installed package, so this checks the .pth
+# rather than anything apt knows about.
+if python3 -c "import robocam" 2>/dev/null; then
+  ok "import robocam"
+else
+  warn "robocam won't import -- run: bash $REPO_DIR/install.sh"
+fi
+
+# getSkeleton() is the one optional extra. Absent is fine and not a warning:
+# faces and plain frames don't need it.
+if python3 -c "import robocam, cv2; robocam._pose.backend(cv2)" 2>/dev/null; then
+  ok "pose model ($(python3 -c 'import robocam; print(robocam._pose.describe())' 2>/dev/null))"
+else
+  echo "  --   no pose model; getSkeleton() needs: bash $REPO_DIR/setup-pose.sh"
 fi
 
 if ! command -v systemctl >/dev/null; then

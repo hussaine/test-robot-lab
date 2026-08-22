@@ -6,12 +6,17 @@ network. The robot-side counterpart is
 
 ```
 YOUR VM (Ubuntu 24.04)              ROBOT (Pi Zero 2 W)
-cvclient.py  ◄── MJPEG stream ───   hardware-encoded camera
-ssh          ───────────────────►   cockpit
+robocam      ◄── MJPEG stream ───   hardware-encoded camera
+cvclient.py  ◄─────────────────────
+ssh          ───────────────────►   cockpit, roboshine
 ```
 
 Heavy work happens here. A Pi Zero 2 W has four slow cores and 512MB, so it
-captures and encodes; your VM does the computer vision.
+captures and encodes; **all** the computer vision runs in your VM.
+
+`robocam` is the library you write scripts against — the VM-side counterpart to
+`roboshine` on the robot. `cvclient.py` is a ready-made viewer, useful before you
+write anything of your own.
 
 ## One-time setup
 
@@ -31,6 +36,12 @@ installs it, but you need it to fetch the script in the first place.
 Then **open a new terminal** so the aliases load. Reboot once as well, so the
 VirtualBox guest additions take effect — you get a resizable window and a shared
 clipboard.
+
+Check it worked:
+
+```bash
+python3 -c "import robocam; robocam.showHelp()"
+```
 
 | Option | Effect |
 |---|---|
@@ -90,11 +101,103 @@ installing only what's actually missing. Built to be run often:
 - **No `apt upgrade`**, so it takes seconds.
 - **No sudo** unless something genuinely needs installing.
 - **New aliases arrive automatically** as the lab grows.
+- **`import robocam` is re-pointed** at the checkout, so a pull is all it takes.
 - `update --check` reports what's missing and changes nothing.
 
 It verifies `ffmpeg` by *running* it, not just finding it on PATH — a
 present-but-broken ffmpeg looks fine to `command -v` and then shows up much later
 as a stream that silently produces no frames.
+
+## robocam — the camera library for your own scripts
+
+The VM-side twin of `roboshine`. `roboshine` moves the robot; `robocam` sees
+through its camera. Importable from anywhere once `setup-vm.sh` has run — no
+virtualenv, no reinstall after a pull.
+
+```python
+import robocam as cam
+
+cam.connect(3)                              # your robot's number or letter
+
+while True:
+    picture = cam.getFrame()                # newest frame, waits for a fresh one
+    picture, faces = cam.findFaces(picture)
+
+    if faces:
+        print("nearest face at", faces[0]["cx"])
+
+    if not cam.showImage(picture):          # q, Esc or closing the window
+        break
+```
+
+Start the camera on the robot first — `cockpit`, item 7. `cam.showHelp()` prints
+the whole API.
+
+| Function | What it does |
+|---|---|
+| `connect(3)` | which robot to watch; `'A'` and `'robot-3.local'` also work |
+| `getFrame()` | the newest picture, as an OpenCV image |
+| `getFrameAge()` | how old that picture already was — your honest lag |
+| `findFaces(picture)` | → picture with boxes, list of faces |
+| `getSkeleton(picture)` | → picture with a skeleton, dict of joints |
+| `showImage(picture)` | show a window; `False` once q, Esc or the X says stop |
+| `saveImage(picture, name)` | write it to a file |
+| `wait(seconds)` | pause |
+| `showHelp()` | print everything |
+
+**`findFaces()`** returns faces sorted biggest first, so `faces[0]` is the
+nearest person. Each is a dict of `x`, `y`, `width`, `height`, `cx`, `cy`, `size`
+— `cx` being the one you want for aiming, `size` for how close they are.
+
+**`getSkeleton()`** returns joints keyed by name, so a script asks for the joint
+it cares about and checks whether it was found:
+
+```python
+picture, joints = cam.getSkeleton(picture)
+
+if "right_wrist" in joints and "right_shoulder" in joints:
+    if joints["right_wrist"]["y"] < joints["right_shoulder"]["y"]:
+        print("hand up!")                   # y counts down from the top
+```
+
+The 13 names, in `robocam.JOINTS`: `nose`, `left_shoulder`, `right_shoulder`,
+`left_elbow`, `right_elbow`, `left_wrist`, `right_wrist`, `left_hip`,
+`right_hip`, `left_knee`, `right_knee`, `left_ankle`, `right_ankle`. Hidden or
+out-of-shot joints are simply absent. One person at a time, and it needs most of
+a body in shot — a head-and-shoulders view finds nothing.
+
+Both hand back a **copy** with the drawing on it, which is why they return two
+things: the clean frame is still yours to use.
+
+### Skeletons need one extra download
+
+Faces and frames work with what `setup-vm.sh` already installed. Joints need a
+pose model, once:
+
+```bash
+bash ~/test-robot-lab/setup-pose.sh
+```
+
+It tries MediaPipe first (a pip package — the only thing in this lab that isn't
+apt, deliberately narrow), and falls back to an OpenPose-style model that apt's
+own OpenCV can read. `update --check` reports which one you have, and treats
+having neither as fine rather than as a problem.
+
+### Examples
+
+```bash
+python3 ~/test-robot-lab/examples/first_look.py 3     # just the camera, and the lag
+python3 ~/test-robot-lab/examples/see_faces.py 3      # faces, left/middle/right
+python3 ~/test-robot-lab/examples/see_skeleton.py 3   # skeleton, hand-up detection
+```
+
+### Why getFrame() works the way it does
+
+It hands back the **newest** frame and never the same one twice, waiting for a
+fresh one if it has to. So a `while True` loop paces itself to the stream with no
+`wait()`, and code slower than the stream drops frames instead of falling further
+and further behind. `getFrameAge()` is the number to watch: if it climbs, lower
+the robot's frame rate rather than letting lag build.
 
 ## cvclient.py — computer vision on the robot's camera
 
@@ -155,4 +258,15 @@ here depends on this working.
 
 **Stream won't connect.** Start it on the robot: `cockpit`, item 7. Item 8 shows
 the stream's log.
+
+**`import robocam` fails.** Run `bash ~/test-robot-lab/install.sh`, then open a
+new terminal. It writes a `.pth` file into your user site-packages pointing at
+the checkout; `update` re-runs it after every pull.
+
+**`getSkeleton()` says no pose model.** Run
+`bash ~/test-robot-lab/setup-pose.sh`. Nothing else needs it.
+
+**Skeletons are slow / the lag climbs.** Pose detection is much heavier than face
+detection. Watch `getFrameAge()`, and lower the robot's frame rate rather than
+letting the lag build — a stale picture is worse than a slow one.
 

@@ -156,6 +156,12 @@ step "Shell aliases"
 # Delegated so update.sh and this script can't drift apart.
 bash "$(dirname "${BASH_SOURCE[0]}")/setup-aliases.sh" | sed 's/^/   /'
 
+step "The robocam library"
+
+# Same reason: install.sh is what update.sh runs too, so there's one way for
+# `import robocam` to get set up.
+bash "$(dirname "${BASH_SOURCE[0]}")/install.sh" | sed 's/^/   /'
+
 # ---------------------------------------------------------------------------
 
 step "Checking it worked"
@@ -192,6 +198,14 @@ else
   warn "install it from code.visualstudio.com; the 'eb' alias needs it"
 fi
 
+# robocam is a path entry rather than an installed package, so check the import
+# the same way a student's script will.
+if python3 -c "import robocam" 2>/dev/null; then
+  ok "import robocam works"
+else
+  warn "robocam won't import -- see the warning further up"
+fi
+
 # mDNS is the one that quietly ruins an afternoon: without it robot-7.local
 # doesn't resolve and nothing can reach the robot.
 if systemctl is-active --quiet avahi-daemon; then
@@ -213,8 +227,19 @@ cat <<EOF
 Open a new terminal (so the aliases load), then:
 
     ssh robot@robot-1.local         connect to your robot
+    python3 examples/first_look.py 1    look through its camera
     ./cvclient.py 1                 computer vision on its camera stream
     update                          get the latest lab code, any time
+
+In your own scripts:
+
+    import robocam as cam
+    cam.connect(1)
+    cam.showHelp()
+
+Skeletons (robocam.getSkeleton) need one extra download, only if you want them:
+
+    bash ~/test-robot-lab/setup-pose.sh
 
 If robot-1.local can't be found, your VM's network adapter is probably set to
 NAT. Change it to ${BOLD}Bridged Adapter${OFF} in the VirtualBox settings -- mDNS
