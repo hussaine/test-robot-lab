@@ -6,7 +6,8 @@
 # Installs what you need to reach a robot and run computer vision on its camera:
 # git, OpenCV, ssh, and mDNS so `robot-7.local` resolves.
 #
-# VS Code is NOT installed here -- install it yourself from code.visualstudio.com.
+# VS Code is optional and not installed here. If you want it, get it from
+# code.visualstudio.com; without it the 'eb' alias falls back to nano.
 #
 # Options:
 #   --skip-upgrade    don't run 'apt upgrade'
@@ -14,7 +15,7 @@
 #   --yes             don't ask for confirmation
 #
 # It also adds three aliases: update (pull the latest lab code and re-check the
-# tools), sb (re-read ~/.bashrc) and eb (edit it in VS Code).
+# tools), sb (re-read ~/.bashrc) and eb (edit it).
 #
 # Safe to re-run.
 
@@ -190,12 +191,13 @@ for tool in git ssh mosquitto_pub ffmpeg; do
   command -v "$tool" >/dev/null && ok "$tool" || warn "$tool is missing"
 done
 
-# VS Code is the student's own job, but the eb alias needs it, so say so plainly.
+# VS Code is optional, and skipping it is a fine choice -- so this is a note
+# rather than a warning. Warnings are counted and printed as problems at the end,
+# and a deliberate choice shouldn't look like a broken setup.
 if command -v code >/dev/null; then
   ok "code -- $(code --version 2>/dev/null | head -1)"
 else
-  warn "VS Code isn't installed or isn't on PATH yet"
-  warn "install it from code.visualstudio.com; the 'eb' alias needs it"
+  echo "   --   no VS Code; 'eb' will use nano instead (code.visualstudio.com if you want it)"
 fi
 
 # robocam is a path entry rather than an installed package, so check the import

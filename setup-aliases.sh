@@ -7,7 +7,7 @@
 # Afterwards:
 #   update   pull the latest lab code and re-check the tools
 #   sb       re-read ~/.bashrc after editing it
-#   eb       edit ~/.bashrc in VS Code
+#   eb       edit ~/.bashrc -- in VS Code if it's installed, otherwise nano
 #
 # Safe to re-run. It rewrites its own managed block rather than appending, and
 # does nothing at all when the block already matches -- so running it often
@@ -33,6 +33,7 @@ awk -v b="$BEGIN" -v e="$END" '
   $0 == e { inblock = 0; next }
   inblock { next }
   /^alias (sb|eb|update|runvenv)=/ { next }
+  /^eb\(\) \{/ { next }
   { print }
 ' "$BASHRC" > "$TMP"
 
@@ -45,7 +46,9 @@ awk -v b="$BEGIN" -v e="$END" '
   echo "$BEGIN"
   echo "alias update='bash $REPO_DIR/update.sh'"
   echo "alias sb='source ~/.bashrc'"
-  echo "alias eb='code ~/.bashrc'"
+  # VS Code is optional, so eb has to work without it -- a function rather than
+  # an alias, because the choice has to happen when it's run, not when it's set.
+  echo "eb() { if command -v code >/dev/null; then code ~/.bashrc; else nano ~/.bashrc; fi; }"
   echo "$END"
 } > "$NEW"
 

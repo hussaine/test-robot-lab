@@ -111,7 +111,7 @@ fi
 if command -v code >/dev/null; then
   ok "VS Code"
 else
-  warn "VS Code isn't on PATH -- install it from code.visualstudio.com"
+  echo "  --   no VS Code; 'eb' uses nano instead"
 fi
 
 # robocam is a path entry, not an installed package, so this checks the .pth

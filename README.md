@@ -20,10 +20,6 @@ write anything of your own.
 
 ## One-time setup
 
-Install **VS Code** yourself first, from
-[code.visualstudio.com](https://code.visualstudio.com) — the script doesn't do
-it. Then:
-
 ```bash
 sudo apt update && sudo apt install -y git
 git clone https://github.com/sjaraza/test-robot-lab.git ~/test-robot-lab
@@ -84,10 +80,11 @@ make a virtualenv then — `python3 -m venv ~/myenv`.
 |---|---|
 | `update` | pull the latest lab code and re-check the tools |
 | `sb` | re-read `~/.bashrc` after editing it |
-| `eb` | open `~/.bashrc` in VS Code |
+| `eb` | edit `~/.bashrc` |
 
-`eb` needs VS Code on your PATH. The script checks and warns if `code` isn't
-found.
+`eb` opens VS Code if you have it, and `nano` if you don't. VS Code is optional —
+install it from [code.visualstudio.com](https://code.visualstudio.com) if you
+want it, and nothing here minds either way.
 
 ## Keeping up to date
 
