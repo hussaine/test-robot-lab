@@ -25,7 +25,7 @@ warn() { echo "  ${YELLOW}!${OFF}    $*"; }
 PACKAGES=(
   git curl ca-certificates
   python3-pip python3-numpy python3-opencv opencv-data
-  openssh-client mosh
+  openssh-client
   avahi-utils libnss-mdns
   mosquitto-clients python3-paho-mqtt
   ffmpeg v4l-utils
@@ -62,7 +62,7 @@ echo "${BOLD}Checking the tools${OFF}"
 
 MISSING=()
 
-for tool in git ssh mosh mosquitto_pub; do
+for tool in git ssh mosquitto_pub; do
   if command -v "$tool" >/dev/null; then
     ok "$tool"
   else

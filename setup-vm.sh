@@ -4,7 +4,7 @@
 #   bash setup-vm.sh
 #
 # Installs what you need to reach a robot and run computer vision on its camera:
-# git, OpenCV, mosh, and mDNS so `robot-7.local` resolves.
+# git, OpenCV, ssh, and mDNS so `robot-7.local` resolves.
 #
 # VS Code is NOT installed here -- install it yourself from code.visualstudio.com.
 #
@@ -91,7 +91,7 @@ ok "internet reachable"
 
 if (( ! ASSUME_YES )); then
   echo
-  echo "This installs OpenCV, mosh, git and mDNS support. A few minutes."
+  echo "This installs OpenCV, git, ssh and mDNS support. A few minutes."
   read -r -p "Continue? [y/N]: " reply
   [[ "$reply" =~ ^[Yy] ]] || { echo "cancelled"; exit 0; }
 fi
@@ -124,7 +124,7 @@ fi
 sudo apt-get "${APT[@]}" install \
   git curl ca-certificates \
   python3-pip python3-numpy python3-opencv opencv-data \
-  openssh-client mosh \
+  openssh-client \
   avahi-utils libnss-mdns \
   mosquitto-clients python3-paho-mqtt \
   ffmpeg v4l-utils \
@@ -133,7 +133,6 @@ sudo apt-get "${APT[@]}" install \
 ok "python3-opencv, python3-numpy   -- computer vision"
 ok "opencv-data                     -- the Haar cascade files"
 ok "openssh-client                  -- reaching the robot"
-ok "mosh                            -- installed, for later"
 ok "avahi-utils, libnss-mdns        -- so robot-7.local resolves"
 ok "mosquitto-clients, paho-mqtt    -- MQTT experiments"
 ok "ffmpeg, v4l-utils               -- stream debugging"
@@ -181,7 +180,7 @@ else:
     print("   !    Haar cascade files not found -- is opencv-data installed?")
 PY
 
-for tool in git ssh mosh mosquitto_pub ffmpeg; do
+for tool in git ssh mosquitto_pub ffmpeg; do
   command -v "$tool" >/dev/null && ok "$tool" || warn "$tool is missing"
 done
 

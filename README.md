@@ -7,7 +7,7 @@ network. The robot-side counterpart is
 ```
 YOUR VM (Ubuntu 24.04)              ROBOT (Pi Zero 2 W)
 cvclient.py  ◄── MJPEG stream ───   hardware-encoded camera
-mosh / ssh   ───────────────────►   cockpit
+ssh          ───────────────────►   cockpit
 ```
 
 Heavy work happens here. A Pi Zero 2 W has four slow cores and 512MB, so it
@@ -20,9 +20,13 @@ Install **VS Code** yourself first, from
 it. Then:
 
 ```bash
+sudo apt update && sudo apt install -y git
 git clone https://github.com/sjaraza/test-robot-lab.git ~/test-robot-lab
 bash ~/test-robot-lab/setup-vm.sh
 ```
+
+The first line is there because a fresh Ubuntu desktop has no `git` — the script
+installs it, but you need it to fetch the script in the first place.
 
 Then **open a new terminal** so the aliases load. Reboot once as well, so the
 VirtualBox guest additions take effect — you get a resizable window and a shared
@@ -42,7 +46,7 @@ Safe to re-run. Logged to `~/vm-setup.log`.
 |---|---|
 | `python3-opencv`, `python3-numpy` | computer vision |
 | `opencv-data` | the Haar cascade files — see below |
-| `openssh-client`, `mosh` | reaching the robot |
+| `openssh-client` | reaching the robot |
 | `avahi-utils`, `libnss-mdns` | so `robot-7.local` resolves at all |
 | `mosquitto-clients`, `python3-paho-mqtt` | MQTT experiments |
 | `ffmpeg`, `v4l-utils` | debugging streams outside Python |
@@ -126,16 +130,17 @@ It buffers internally, so CV slower than the stream falls progressively further
 behind until the picture is seconds stale. `cvclient.py` keeps only the newest
 frame and drops the rest, which is the right trade for anything that steers.
 
-## mosh instead of ssh
+## Reaching the robot
 
 ```bash
-mosh robot@robot-1.local
+ssh robot@robot-1.local
 ```
 
-Better than `ssh` on a congested 2.4GHz AP: keystrokes echo locally instead of
-waiting for a round trip, and the session survives dropouts, roaming and a closed
-lid. Needs installing on **both** ends — `setup-vm.sh` does this side, and
-`setup-mosh.sh` in test-robot-tools does the robot.
+Plain `ssh` on this side for now. `mosh` — which echoes keystrokes locally and
+survives dropouts, and is the nicer thing to have on a congested 2.4GHz AP — is
+installed on the robots by `setup-mosh.sh` in test-robot-tools, but is
+deliberately **not** part of the VM setup yet. One less moving part while the VM
+side is still being proven; `sudo apt install mosh` is all it takes to add later.
 
 ## Troubleshooting
 
@@ -151,5 +156,3 @@ here depends on this working.
 **Stream won't connect.** Start it on the robot: `cockpit`, item 7. Item 8 shows
 the stream's log.
 
-**`mosh` fails but `ssh` works.** Usually mosh missing on one end, a non-UTF-8
-locale on the robot, or UDP 60000-61000 blocked.
