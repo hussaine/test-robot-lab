@@ -35,7 +35,7 @@ The instructor computer performs the heavier perception and AI processing.
 Laptop-side repository:
 
 ```text
-https://github.com/sjaraza/test-robot-lab
+https://github.com/hussaine/test-robot-lab
 ```
 
 Robot-side tools:
@@ -324,46 +324,26 @@ Two Python environments were used.
 
 Do not modify the known-working environments immediately before class.
 
-### Environment A — Original CV Demos
+### Environment
 
 ```text
-.venv
-Python 3.14
+brew install python@3.12
+python3.12 -m venv .venv-yolo
+python -m pip install --upgrade pip
+python -m pip install ultralytics
+python -m pip install "numpy<2"
+python -m pip install "mediapipe==0.10.20"
+
+#python -m pip install --no-cache-dir --force-reinstall "mediapipe==0.10.20" "numpy<2"
+#python -m pip install --force-reinstall --no-deps opencv-contrib-python==4.11.0.86
 ```
 
 Used for the original OpenCV / face demos.
-
-Activate:
-
-```bash
-cd /Users/hussain/codes/test-robot-lab
-source .venv/bin/activate
-```
 
 Example:
 
 ```bash
 PYTHONPATH=. python examples/face_tracking_robot3.py robot-1.local
-```
-
-### Environment B — YOLO + MediaPipe
-
-```text
-.venv-yolo
-Python 3.12
-```
-
-Used for:
-
-- YOLO full-person detection
-- MediaPipe pose estimation
-- gesture control
-
-Activate:
-
-```bash
-cd /Users/hussain/codes/test-robot-lab
-source .venv-yolo/bin/activate
 ```
 
 Known working versions:
@@ -614,7 +594,16 @@ This is an intuitive introduction to proportional feedback control.
 Activate:
 
 ```bash
+python3.12 -m venv .venv-yolo
 source .venv-yolo/bin/activate
+
+python -m pip install --upgrade pip
+python -m pip install ultralytics
+python -m pip install "numpy<2"
+
+python -c "import torch; print(torch.__version__)"
+python -c "from ultralytics import YOLO; print('YOLO OK')"
+
 ```
 
 Run:
@@ -652,6 +641,11 @@ Activate:
 
 ```bash
 source .venv-yolo/bin/activate
+python -m pip uninstall -y mediapipe
+python -m pip install --no-cache-dir --force-reinstall "mediapipe==0.10.20" "numpy<2"
+# python -m pip install --force-reinstall --no-deps opencv-contrib-python==4.11.0.86
+python -c "import mediapipe as mp; print(mp.__version__)"
+PYTHONPATH=. python -c "import robocam, cv2; robocam._pose.backend(cv2); print(robocam._pose.describe())"
 ```
 
 Run:
